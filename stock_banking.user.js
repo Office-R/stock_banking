@@ -186,6 +186,23 @@
         const buyBlock = panel.querySelector('.buyBlock___bIlBS .actions___PIYmF');
         const sellBlock = panel.querySelector('.sellBlock___A_yTW .actions___PIYmF');
 
+        // helper: detect whether a visible Buy/Sell button exists in a block's container
+        function hasActionButton(block, re) {
+            if (!block) return false;
+            const container = block.parentElement || block;
+            const buttons = container.querySelectorAll('button');
+            for (const b of buttons) {
+                const text = (b.textContent || '').trim();
+                if (re.test(text)) return true;
+                const aria = b.getAttribute('aria-label') || '';
+                if (re.test(aria)) return true;
+            }
+            return false;
+        }
+
+        const buyExists = hasActionButton(buyBlock, /buy/i);
+        const sellExists = hasActionButton(sellBlock, /sell/i);
+
         // Determine the current stock price from the clicked UL (use aria-label as primary source)
         let stockPrice = 0;
         try {
@@ -203,7 +220,7 @@
             stockPrice = 0;
         }
 
-        if (buyBlock && !panel.querySelector('#purchase_total')) {
+        if (buyBlock && buyExists && !panel.querySelector('#purchase_total')) {
             const buyCalc = document.createElement('div');
             buyCalc.className = 'actions___PIYmF withInput___ZVcue'; 
             buyCalc.style.marginTop = '10px';
@@ -217,7 +234,7 @@
             buyBlock.parentElement.appendChild(buyCalc);
         }
 
-        if (sellBlock && !panel.querySelector('#selling_total')) {
+        if (sellBlock && sellExists && !panel.querySelector('#selling_total')) {
             const sellCalc = document.createElement('div');
             sellCalc.className = 'actions___PIYmF withInput___ZVcue'; 
             sellCalc.style.marginTop = '10px';
@@ -232,17 +249,19 @@
         }
 
         setTimeout(() => { 
-            attachThousandsFormatter(panel.querySelector('#purchase_total'));
-            attachThousandsFormatter(panel.querySelector('#selling_total'));
+            const purchaseInput = panel.querySelector('#purchase_total');
+            const sellingInput = panel.querySelector('#selling_total');
+            if (purchaseInput) attachThousandsFormatter(purchaseInput);
+            if (sellingInput) attachThousandsFormatter(sellingInput);
 
             const buyBtn = panel.querySelector('#calc_buy');
             const sellBtn = panel.querySelector('#calc_sell');
 
-            if (buyBtn) {
+            if (buyBtn && !buyBtn.dataset.sbListener) {
+                buyBtn.dataset.sbListener = '1';
                 buyBtn.addEventListener('click', () => {
                     const rawInput = panel.querySelector('#purchase_total')?.value || "";
                     const inputVal = parseAbbreviation(rawInput);
-                    // use stockPrice determined from the UL; fallback to 0
                     const price = stockPrice || 0;
                     if (!isNaN(inputVal) && price > 0) {
                         const shares = Math.ceil(inputVal / price);
@@ -252,7 +271,8 @@
                 });
             }
 
-            if (sellBtn) {
+            if (sellBtn && !sellBtn.dataset.sbListener) {
+                sellBtn.dataset.sbListener = '1';
                 sellBtn.addEventListener('click', () => {
                     const rawInput = panel.querySelector('#selling_total')?.value || "";
                     const inputVal = parseAbbreviation(rawInput);
@@ -263,6 +283,22 @@
                         if (inputField) setNativeValue(inputField, shares);
                     }
                 });
+            }
+
+            // If buy/sell buttons are not present, remove respective calculator nodes to reduce work
+            if (!buyExists) {
+                const p = panel.querySelector('#purchase_total');
+                if (p) {
+                    const wrapper = p.closest('.withInput___ZVcue') || p.parentElement;
+                    if (wrapper) wrapper.remove();
+                }
+            }
+            if (!sellExists) {
+                const s = panel.querySelector('#selling_total');
+                if (s) {
+                    const wrapper = s.closest('.withInput___ZVcue') || s.parentElement;
+                    if (wrapper) wrapper.remove();
+                }
             }
         }, 50);
 
