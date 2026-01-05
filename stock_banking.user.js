@@ -217,6 +217,26 @@
                 });
             }
         }, 50);
+
+        // Ensure calculators are re-added if the panel updates (e.g., after a buy/sell action)
+        try {
+            if (!panel.dataset.sbObserver) {
+                panel.dataset.sbObserver = '1';
+                const obs = new MutationObserver((mutations) => {
+                    if (panel._sbPending) return;
+                    panel._sbPending = true;
+                    setTimeout(() => {
+                        try { showCalculators(panel, ul); } catch (e) { /* ignore */ }
+                        panel._sbPending = false;
+                    }, 60);
+                });
+                obs.observe(panel, { childList: true, subtree: true, attributes: false });
+                // store so it can be disconnected later if needed
+                panel._sbObserver = obs;
+            }
+        } catch (e) {
+            /* ignore observer errors */
+        }
     }
 
 })();
