@@ -268,6 +268,14 @@
                 <div style="margin-left: 10px"><button type="button" class="torn-btn gray" id="calc_buy" style="margin-top: 4px;">Calc</button></div>
             `;
             buyBlock.parentElement.appendChild(buyCalc);
+            // remove any unwanted default '0' the page/framework might put into the new input
+            setTimeout(() => {
+                const pi = buyCalc.querySelector('#purchase_total') || buyCalc.querySelector('input');
+                if (pi) {
+                    if (pi.value === '0' || pi.value === '0.00') pi.value = '';
+                    pi.addEventListener('focus', () => { if (pi.value === '0' || pi.value === '0.00') pi.value = ''; });
+                }
+            }, 60);
         }
 
         if (sellBlock && sellExists && !panel.querySelector('#selling_total')) {
@@ -282,6 +290,14 @@
                 <div style="margin-left: 10px"><button type="button" class="torn-btn gray" id="calc_sell" style="margin-top: 4px;">Calc</button></div>
             `;
             sellBlock.parentElement.appendChild(sellCalc);
+            // remove any unwanted default '0' the page/framework might put into the new input
+            setTimeout(() => {
+                const si = sellCalc.querySelector('#selling_total') || sellCalc.querySelector('input');
+                if (si) {
+                    if (si.value === '0' || si.value === '0.00') si.value = '';
+                    si.addEventListener('focus', () => { if (si.value === '0' || si.value === '0.00') si.value = ''; });
+                }
+            }, 60);
         }
 
         setTimeout(() => { 
