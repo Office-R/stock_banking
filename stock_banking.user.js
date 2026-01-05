@@ -84,17 +84,30 @@
         const compact = raw.replace(/\s+/g, '');
         const match = compact.match(/^([\d,]*\.?\d*)([kmbKMb])?$/);
         if (!match) {
-            // if input contains other invalid chars, strip them
+            // strip invalid chars but keep digits, dots and suffix letters
             const cleaned = compact.replace(/[^0-9kKmMb\.\,]/g, '');
             el.value = cleaned;
-            el.setSelectionRange(caret > el.value.length ? el.value.length : caret, caret > el.value.length ? el.value.length : caret);
+            el.setSelectionRange(Math.min(caret, el.value.length), Math.min(caret, el.value.length));
             return;
         }
         let numPart = (match[1] || '').replace(/,/g, '');
         const suffix = (match[2] || '').toLowerCase();
         if (!numPart) { el.value = suffix ? ('0' + suffix) : ''; return; }
 
-        // Preserve decimals, format integer part with thousands separators
+        // If input lost focus (blur), expand suffix to full numeric value
+        const isFocused = (document.activeElement === el);
+        if (!isFocused && suffix) {
+            const multiplier = suffix === 'k' ? 1_000 : (suffix === 'm' ? 1_000_000 : 1_000_000_000);
+            const value = parseFloat(numPart || '0') * multiplier;
+            let formatted;
+            if (Number.isInteger(value)) formatted = value.toLocaleString('en-US');
+            else formatted = value.toLocaleString('en-US', { maximumFractionDigits: 8 }).replace(/\.?0+$/, '');
+            el.value = formatted;
+            el.setSelectionRange(el.value.length, el.value.length);
+            return;
+        }
+
+        // While typing (focused) preserve suffix and show formatted integer part
         const parts = numPart.split('.');
         const intPart = parts[0] || '0';
         const fracPart = parts[1] || '';
@@ -179,7 +192,8 @@
 
             if (buyBtn) {
                 buyBtn.addEventListener('click', () => {
-                    const inputVal = parseFloat(panel.querySelector('#purchase_total')?.value.replace(/[^\d.]/g, ''));
+                    const rawInput = panel.querySelector('#purchase_total')?.value || "";
+                    const inputVal = parseAbbreviation(rawInput);
                     // use stockPrice determined from the UL; fallback to 0
                     const price = stockPrice || 0;
                     if (!isNaN(inputVal) && price > 0) {
