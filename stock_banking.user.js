@@ -54,40 +54,54 @@
         });
     }
 
-    // Observe document for changes to the owned panel so calculators can be re-added
+    // Observe the narrow panel area for changes so calculators can be re-added efficiently
     function setupPanelObserver() {
         if (window.__sb_panelObserver) return;
         try {
-            // debounce handler to avoid frequent re-inserts during rapid updates
-            let panelTimer = null;
-            const obs = new MutationObserver((mutations) => {
-                if (panelTimer) return;
-                panelTimer = setTimeout(() => {
-                    panelTimer = null;
-                    const panel = document.querySelector('#panel-ownedTab');
-                    if (panel) {
-                        const ul = window.__sb_lastUL || document.querySelector('ul[class^="stock___"]');
-                        try { showCalculators(panel, ul); } catch (e) { /* ignore */ }
-                    }
-                }, 500);
-            });
-            // observe a narrower root to reduce overhead
-            const root = document.querySelector('[class^="stockMarket___"]') || document.body;
-            obs.observe(root, { childList: true, subtree: true });
-            window.__sb_panelObserver = obs;
-            // also listen for clicks inside the panel to re-add calculators after actions
+            function debounce(fn, wait) {
+                let t = null;
+                return function(...args) {
+                    if (t) clearTimeout(t);
+                    t = setTimeout(() => { t = null; fn(...args); }, wait);
+                };
+            }
+
+            const tryShowForPanel = debounce(() => {
+                const panel = document.querySelector('#panel-ownedTab');
+                if (panel) {
+                    const ul = window.__sb_lastUL || document.querySelector('ul[class^="stock___"]');
+                    try { showCalculators(panel, ul); } catch (e) { /* ignore */ }
+                }
+            }, 500);
+
+            function observePanel(panelEl) {
+                if (!panelEl || panelEl.__sb_observing) return;
+                panelEl.__sb_observing = true;
+                const panelObs = new MutationObserver(tryShowForPanel);
+                panelObs.observe(panelEl, { childList: true, subtree: true });
+                panelEl.__sb_obs = panelObs;
+            }
+
+            const stockRoot = document.querySelector('[class^="stockMarket___"]') || document.body;
+            const rootObs = new MutationObserver(debounce(() => {
+                const panel = document.querySelector('#panel-ownedTab');
+                if (panel) {
+                    observePanel(panel);
+                    tryShowForPanel();
+                }
+            }, 500));
+            rootObs.observe(stockRoot, { childList: true, subtree: true });
+
+            const existingPanel = document.querySelector('#panel-ownedTab');
+            if (existingPanel) observePanel(existingPanel);
+
+            window.__sb_panelObserver = rootObs;
+
             if (!window.__sb_clickHandlerAdded) {
                 window.__sb_clickHandlerAdded = true;
                 document.addEventListener('click', (ev) => {
-                    if (ev.target && ev.target.closest && ev.target.closest('#panel-ownedTab')) {
-                        setTimeout(() => {
-                            const panel = document.querySelector('#panel-ownedTab');
-                            if (panel) {
-                                const ul = window.__sb_lastUL || document.querySelector('ul[class^="stock___"]');
-                                try { showCalculators(panel, ul); } catch (e) { /* ignore */ }
-                            }
-                        }, 200);
-                    }
+                    const panel = ev.target && ev.target.closest ? ev.target.closest('#panel-ownedTab') : null;
+                    if (panel) setTimeout(tryShowForPanel, 300);
                 }, true);
             }
         } catch (e) {
