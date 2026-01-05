@@ -72,7 +72,7 @@
                     const ul = window.__sb_lastUL || document.querySelector('ul[class^="stock___"]');
                     try { showCalculators(panel, ul); } catch (e) { /* ignore */ }
                 }
-            }, 500);
+            }, 100);
 
             function observePanel(panelEl) {
                 if (!panelEl || panelEl.__sb_observing) return;
@@ -89,7 +89,7 @@
                     observePanel(panel);
                     tryShowForPanel();
                 }
-            }, 500));
+            }, 100));
             rootObs.observe(stockRoot, { childList: true, subtree: true });
 
             const existingPanel = document.querySelector('#panel-ownedTab');
@@ -101,7 +101,12 @@
                 window.__sb_clickHandlerAdded = true;
                 document.addEventListener('click', (ev) => {
                     const panel = ev.target && ev.target.closest ? ev.target.closest('#panel-ownedTab') : null;
-                    if (panel) setTimeout(tryShowForPanel, 300);
+                    if (panel) {
+                        // try immediate, then short retries — fast re-add without heavy observer work
+                        tryShowForPanel();
+                        setTimeout(tryShowForPanel, 80);
+                        setTimeout(tryShowForPanel, 300);
+                    }
                 }, true);
             }
         } catch (e) {
