@@ -69,9 +69,11 @@
                         const ul = window.__sb_lastUL || document.querySelector('ul[class^="stock___"]');
                         try { showCalculators(panel, ul); } catch (e) { /* ignore */ }
                     }
-                }, 300);
+                }, 500);
             });
-            obs.observe(document.body, { childList: true, subtree: true });
+            // observe a narrower root to reduce overhead
+            const root = document.querySelector('[class^="stockMarket___"]') || document.body;
+            obs.observe(root, { childList: true, subtree: true });
             window.__sb_panelObserver = obs;
             // also listen for clicks inside the panel to re-add calculators after actions
             if (!window.__sb_clickHandlerAdded) {
@@ -123,32 +125,44 @@
         if (!el) return;
         const raw = el.value ?? '';
         const caret = el.selectionStart ?? raw.length;
-        // keep only digits, comma, dot and suffix letters; allow one dot and optional single suffix at end
-        let cleaned = raw.replace(/[^0-9kKmMb\.,]/g, '');
-        // move any suffix to the end and keep only one suffix letter
-        const suffixMatch = cleaned.match(/([kKmMb])$/);
-        const suffix = suffixMatch ? suffixMatch[1] : '';
-        if (suffix) cleaned = cleaned.slice(0, cleaned.length - 1);
-        // ensure at most one dot
-        const parts = cleaned.split('.');
-        if (parts.length > 1) {
-            cleaned = parts.shift() + '.' + parts.join('');
+        // normalize: keep digits, commas, dot and suffix letters
+        let working = raw.replace(/[^0-9kKmMb\.,]/g, '');
+        // extract suffix if present at end
+        const suffixMatch = working.match(/([kKmMb])$/);
+        const suffix = suffixMatch ? suffixMatch[1].toLowerCase() : '';
+        if (suffix) working = working.slice(0, -1);
+
+        // allow at most one dot; if multiple, keep first and concatenate rest into fraction
+        const firstDot = working.indexOf('.');
+        let intPart = working;
+        let fracPart = '';
+        let trailingDot = false;
+        if (firstDot >= 0) {
+            intPart = working.slice(0, firstDot);
+            fracPart = working.slice(firstDot + 1);
+            // if original ends with dot and caret is at end, preserve trailing dot
+            trailingDot = working.endsWith('.') || raw.endsWith('.');
+            // remove any extra dots from fracPart
+            fracPart = fracPart.replace(/\./g, '');
         }
-        // remove stray commas from fractional part
-        const cp = cleaned.split('.');
-        const intPart = (cp[0] || '').replace(/,/g, '') || '0';
-        const fracPart = cp[1] || '';
-        // format integer part with thousands separators without BigInt
+        intPart = intPart.replace(/,/g, '') || '0';
+
+        // format integer part with thousands separators
         const intFormatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-        const formattedNumber = fracPart ? (intFormatted + '.' + fracPart) : intFormatted;
-        el.value = suffix ? (formattedNumber + suffix.toLowerCase()) : formattedNumber;
-        // place caret roughly where it was (best-effort)
-        const digitsBefore = raw.slice(0, caret).replace(/[^0-9\.]/g, '').length;
-        let pos = 0, d = 0;
-        while (pos < el.value.length && d < digitsBefore) {
-            if (/[0-9\.]/.test(el.value[pos])) d++;
+        let newValue = fracPart ? (intFormatted + '.' + fracPart) : intFormatted;
+        if (trailingDot && !fracPart) newValue = newValue + '.';
+        if (suffix) newValue = newValue + suffix;
+        // compute caret position: count digits+dot before original caret
+        const nonFormatBefore = raw.slice(0, caret).split('').filter(ch => /[0-9\.]/.test(ch)).length;
+        // map to newValue: find position after the nth digit/dot
+        let pos = 0, count = 0;
+        while (pos < newValue.length && count < nonFormatBefore) {
+            if (/[0-9\.]/.test(newValue[pos])) count++;
             pos++;
         }
+        // if caret was at end, keep it at end
+        if (caret === raw.length) pos = newValue.length;
+        el.value = newValue;
         el.setSelectionRange(pos, pos);
     }
 
