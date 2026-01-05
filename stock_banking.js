@@ -4,6 +4,8 @@
 // @description  A helper script to calculate how many of a certain stock to buy/sell based on a cash money value
 // @author       hundeja
 // @match        https://www.torn.com/page.php?sid=stocks*
+// @downloadURL  https://raw.githubusercontent.com/Office-R/stock_banking/refs/heads/main/stock_banking.js
+// @updateURL    https://raw.githubusercontent.com/Office-R/stock_banking/refs/heads/main/stock_banking.js
 // ==/UserScript==
 
 (function () {
