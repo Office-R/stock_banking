@@ -45,7 +45,7 @@
                 // small delay lets the panel render before we query it
                 setTimeout(() => {
                     const panel = document.querySelector('#panel-ownedTab');
-                    if (panel) showCalculators(panel);
+                    if (panel) showCalculators(panel, ul);
                 }, 150);
             }
         });
@@ -103,9 +103,26 @@
         input.addEventListener('blur', () => formatThousandsInput(input));
     }
 
-    function showCalculators(panel) { 
+    function showCalculators(panel, ul) {
         const buyBlock = panel.querySelector('.buyBlock___bIlBS .actions___PIYmF');
         const sellBlock = panel.querySelector('.sellBlock___A_yTW .actions___PIYmF');
+
+        // Determine the current stock price from the clicked UL (use aria-label as primary source)
+        let stockPrice = 0;
+        try {
+            const priceLi = ul.querySelector('li[data-name="priceTab"]') || ul.querySelector('li.stockPrice___WCQuw');
+            if (priceLi) {
+                const aria = priceLi.getAttribute('aria-label') || '';
+                const m = aria.match(/\$[\d,]+(?:\.\d+)?/);
+                if (m) stockPrice = parseFloat(m[0].replace(/[$,]/g, ''));
+                else {
+                    const priceDiv = priceLi.querySelector('.price___CTjJE');
+                    if (priceDiv) stockPrice = parseFloat(priceDiv.textContent.replace(/[^0-9.]/g, '')) || 0;
+                }
+            }
+        } catch (e) {
+            stockPrice = 0;
+        }
 
         if (buyBlock && !panel.querySelector('#purchase_total')) {
             const buyCalc = document.createElement('div');
@@ -145,17 +162,10 @@
             if (buyBtn) {
                 buyBtn.addEventListener('click', () => {
                     const inputVal = parseFloat(panel.querySelector('#purchase_total')?.value.replace(/[^\d.]/g, ''));
-                    const priceElements = panel.querySelectorAll('li[class^="current___"]');
-                    let stockPriceText = null;
-
-                    priceElements.forEach(el => {
-                        const text = el.textContent.trim();
-                        if (text.startsWith('$')) stockPriceText = text;
-                    });
-
-                    const stockPrice = stockPriceText ? parseFloat(stockPriceText.replace(/[^\d.]/g, '')) : 0;
-                    if (!isNaN(inputVal) && stockPrice > 0) {
-                        const shares = Math.floor(inputVal / stockPrice);
+                    // use stockPrice determined from the UL; fallback to 0
+                    const price = stockPrice || 0;
+                    if (!isNaN(inputVal) && price > 0) {
+                        const shares = Math.floor(inputVal / price);
                         const inputField = panel.querySelector('.buyBlock___bIlBS input.input-money');
                         if (inputField) setNativeValue(inputField, shares);
                     }
@@ -166,17 +176,9 @@
                 sellBtn.addEventListener('click', () => {
                     const rawInput = panel.querySelector('#selling_total')?.value || "";
                     const inputVal = parseAbbreviation(rawInput);
-                    const priceElements = panel.querySelectorAll('li[class^="current___"]');
-                    let stockPriceText = null;
-
-                    priceElements.forEach(el => {
-                        const text = el.textContent.trim();
-                        if (text.startsWith('$')) stockPriceText = text;
-                    });
-
-                    const stockPrice = stockPriceText ? parseFloat(stockPriceText.replace(/[^\d.]/g, '')) : 0;
-                    if (!isNaN(inputVal) && stockPrice > 0) {
-                        const shares = Math.floor(inputVal / stockPrice);
+                    const price = stockPrice || 0;
+                    if (!isNaN(inputVal) && price > 0) {
+                        const shares = Math.floor(inputVal / price);
                         const inputField = panel.querySelector('.sellBlock___A_yTW input.input-money');
                         if (inputField) setNativeValue(inputField, shares);
                     }
