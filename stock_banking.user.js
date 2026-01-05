@@ -185,7 +185,36 @@
         if (!input || input.dataset.thousandsFormatter) return;
         input.dataset.thousandsFormatter = '1';
         input.setAttribute('inputmode', 'numeric');
-        input.addEventListener('input', () => formatThousandsInput(input));
+        // lightweight input handler: only sanitize allowed chars to avoid heavy work on each keystroke
+        input.addEventListener('input', () => {
+            try {
+                const el = input;
+                const prev = el.value || '';
+                const selStart = el.selectionStart ?? prev.length;
+                // keep digits, dot, comma and suffix letters
+                let cleaned = prev.replace(/[^0-9kKmMb\.,]/g, '');
+                // move any suffix to the end and keep at most one suffix
+                const suffixMatch = cleaned.match(/([kKmMb])$/);
+                const suffix = suffixMatch ? suffixMatch[1].toLowerCase() : '';
+                if (suffix) cleaned = cleaned.slice(0, -1);
+                // collapse multiple dots to first dot + rest removed
+                const firstDot = cleaned.indexOf('.');
+                if (firstDot >= 0) {
+                    cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '');
+                }
+                // remove commas from integer part only (do not re-insert commas here)
+                const parts = cleaned.split('.');
+                parts[0] = parts[0].replace(/,/g, '');
+                cleaned = parts.join('.');
+                if (suffix) cleaned = cleaned + suffix;
+                if (cleaned !== prev) {
+                    const caret = Math.min(selStart, cleaned.length);
+                    el.value = cleaned;
+                    el.setSelectionRange(caret, caret);
+                }
+            } catch (e) { /* ignore */ }
+        });
+        // full formatting/expansion runs on blur (less frequent)
         input.addEventListener('blur', () => formatThousandsInput(input));
     }
 
