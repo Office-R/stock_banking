@@ -58,24 +58,18 @@
     function setupPanelObserver() {
         if (window.__sb_panelObserver) return;
         try {
+            // debounce handler to avoid frequent re-inserts during rapid updates
+            let panelTimer = null;
             const obs = new MutationObserver((mutations) => {
-                for (const m of mutations) {
-                    // if nodes added or subtree changed, try to find the panel
-                    if (m.addedNodes && m.addedNodes.length) {
-                        const panel = document.querySelector('#panel-ownedTab');
-                        if (panel) {
-                            const ul = window.__sb_lastUL || document.querySelector('ul[class^="stock___"]');
-                            try { showCalculators(panel, ul); } catch (e) { /* ignore */ }
-                        }
+                if (panelTimer) return;
+                panelTimer = setTimeout(() => {
+                    panelTimer = null;
+                    const panel = document.querySelector('#panel-ownedTab');
+                    if (panel) {
+                        const ul = window.__sb_lastUL || document.querySelector('ul[class^="stock___"]');
+                        try { showCalculators(panel, ul); } catch (e) { /* ignore */ }
                     }
-                    if (m.type === 'childList' && m.target && m.target.id === 'panel-ownedTab') {
-                        const panel = document.querySelector('#panel-ownedTab');
-                        if (panel) {
-                            const ul = window.__sb_lastUL || document.querySelector('ul[class^="stock___"]');
-                            try { showCalculators(panel, ul); } catch (e) { /* ignore */ }
-                        }
-                    }
-                }
+                }, 300);
             });
             obs.observe(document.body, { childList: true, subtree: true });
             window.__sb_panelObserver = obs;
@@ -129,44 +123,29 @@
         if (!el) return;
         const raw = el.value ?? '';
         const caret = el.selectionStart ?? raw.length;
-        const compact = raw.replace(/\s+/g, '');
-        const match = compact.match(/^([\d,]*\.?\d*)([kmbKMb])?$/);
-        if (!match) {
-            // strip invalid chars but keep digits, dots and suffix letters
-            const cleaned = compact.replace(/[^0-9kKmMb\.\,]/g, '');
-            el.value = cleaned;
-            el.setSelectionRange(Math.min(caret, el.value.length), Math.min(caret, el.value.length));
-            return;
+        // keep only digits, comma, dot and suffix letters; allow one dot and optional single suffix at end
+        let cleaned = raw.replace(/[^0-9kKmMb\.,]/g, '');
+        // move any suffix to the end and keep only one suffix letter
+        const suffixMatch = cleaned.match(/([kKmMb])$/);
+        const suffix = suffixMatch ? suffixMatch[1] : '';
+        if (suffix) cleaned = cleaned.slice(0, cleaned.length - 1);
+        // ensure at most one dot
+        const parts = cleaned.split('.');
+        if (parts.length > 1) {
+            cleaned = parts.shift() + '.' + parts.join('');
         }
-        let numPart = (match[1] || '').replace(/,/g, '');
-        const suffix = (match[2] || '').toLowerCase();
-        if (!numPart) { el.value = suffix ? ('0' + suffix) : ''; return; }
-
-        // If input lost focus (blur), expand suffix to full numeric value
-        const isFocused = (document.activeElement === el);
-        if (!isFocused && suffix) {
-            const multiplier = suffix === 'k' ? 1_000 : (suffix === 'm' ? 1_000_000 : 1_000_000_000);
-            const value = parseFloat(numPart || '0') * multiplier;
-            let formatted;
-            if (Number.isInteger(value)) formatted = value.toLocaleString('en-US');
-            else formatted = value.toLocaleString('en-US', { maximumFractionDigits: 8 }).replace(/\.?0+$/, '');
-            el.value = formatted;
-            el.setSelectionRange(el.value.length, el.value.length);
-            return;
-        }
-
-        // While typing (focused) preserve suffix and show formatted integer part
-        const parts = numPart.split('.');
-        const intPart = parts[0] || '0';
-        const fracPart = parts[1] || '';
-        const formattedInt = intPart ? BigInt(intPart).toLocaleString('en-US') : '0';
-        const formattedNumber = fracPart ? (formattedInt + '.' + fracPart) : formattedInt;
-        el.value = suffix ? (formattedNumber + suffix) : formattedNumber;
-
-        // Recompute caret position based on digits and dot
-        const countBefore = raw.slice(0, caret).split('').filter(c => /[0-9\.]/.test(c)).length;
+        // remove stray commas from fractional part
+        const cp = cleaned.split('.');
+        const intPart = (cp[0] || '').replace(/,/g, '') || '0';
+        const fracPart = cp[1] || '';
+        // format integer part with thousands separators without BigInt
+        const intFormatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        const formattedNumber = fracPart ? (intFormatted + '.' + fracPart) : intFormatted;
+        el.value = suffix ? (formattedNumber + suffix.toLowerCase()) : formattedNumber;
+        // place caret roughly where it was (best-effort)
+        const digitsBefore = raw.slice(0, caret).replace(/[^0-9\.]/g, '').length;
         let pos = 0, d = 0;
-        while (pos < el.value.length && d < countBefore) {
+        while (pos < el.value.length && d < digitsBefore) {
             if (/[0-9\.]/.test(el.value[pos])) d++;
             pos++;
         }
