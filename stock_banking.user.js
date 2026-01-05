@@ -81,14 +81,32 @@
         if (!el) return;
         const raw = el.value ?? '';
         const caret = el.selectionStart ?? raw.length;
-        const digitsBeforeCaret = raw.slice(0, caret).replace(/\D/g, '').length;
-        const digits = raw.replace(/\D/g, '');
-        if (!digits) { el.value = ''; return; }
-        const formatted = BigInt(digits).toLocaleString('en-US');
-        el.value = formatted;
+        const compact = raw.replace(/\s+/g, '');
+        const match = compact.match(/^([\d,]*\.?\d*)([kmbKMb])?$/);
+        if (!match) {
+            // if input contains other invalid chars, strip them
+            const cleaned = compact.replace(/[^0-9kKmMb\.\,]/g, '');
+            el.value = cleaned;
+            el.setSelectionRange(caret > el.value.length ? el.value.length : caret, caret > el.value.length ? el.value.length : caret);
+            return;
+        }
+        let numPart = (match[1] || '').replace(/,/g, '');
+        const suffix = (match[2] || '').toLowerCase();
+        if (!numPart) { el.value = suffix ? ('0' + suffix) : ''; return; }
+
+        // Preserve decimals, format integer part with thousands separators
+        const parts = numPart.split('.');
+        const intPart = parts[0] || '0';
+        const fracPart = parts[1] || '';
+        const formattedInt = intPart ? BigInt(intPart).toLocaleString('en-US') : '0';
+        const formattedNumber = fracPart ? (formattedInt + '.' + fracPart) : formattedInt;
+        el.value = suffix ? (formattedNumber + suffix) : formattedNumber;
+
+        // Recompute caret position based on digits and dot
+        const countBefore = raw.slice(0, caret).split('').filter(c => /[0-9\.]/.test(c)).length;
         let pos = 0, d = 0;
-        while (pos < formatted.length && d < digitsBeforeCaret) {
-            if (/\d/.test(formatted[pos])) d++;
+        while (pos < el.value.length && d < countBefore) {
+            if (/[0-9\.]/.test(el.value[pos])) d++;
             pos++;
         }
         el.setSelectionRange(pos, pos);
@@ -165,7 +183,7 @@
                     // use stockPrice determined from the UL; fallback to 0
                     const price = stockPrice || 0;
                     if (!isNaN(inputVal) && price > 0) {
-                        const shares = Math.floor(inputVal / price);
+                        const shares = Math.ceil(inputVal / price);
                         const inputField = panel.querySelector('.buyBlock___bIlBS input.input-money');
                         if (inputField) setNativeValue(inputField, shares);
                     }
@@ -178,7 +196,7 @@
                     const inputVal = parseAbbreviation(rawInput);
                     const price = stockPrice || 0;
                     if (!isNaN(inputVal) && price > 0) {
-                        const shares = Math.floor(inputVal / price);
+                        const shares = Math.ceil(inputVal / price);
                         const inputField = panel.querySelector('.sellBlock___A_yTW input.input-money');
                         if (inputField) setNativeValue(inputField, shares);
                     }
