@@ -31,6 +31,7 @@
     // Entry point: attach event listeners.
     function run() {
         monitorStockClicks();
+        setupPanelObserver();
     }
 
 
@@ -42,6 +43,8 @@
 
             const ul = li.closest('ul[class^="stock___"]');
             if (ul && ul.id) {
+                // remember last clicked UL so observer can re-add calculators for it
+                try { window.__sb_lastUL = ul; } catch (e) { /* ignore */ }
                 // small delay lets the panel render before we query it
                 setTimeout(() => {
                     const panel = document.querySelector('#panel-ownedTab');
@@ -49,6 +52,51 @@
                 }, 150);
             }
         });
+    }
+
+    // Observe document for changes to the owned panel so calculators can be re-added
+    function setupPanelObserver() {
+        if (window.__sb_panelObserver) return;
+        try {
+            const obs = new MutationObserver((mutations) => {
+                for (const m of mutations) {
+                    // if nodes added or subtree changed, try to find the panel
+                    if (m.addedNodes && m.addedNodes.length) {
+                        const panel = document.querySelector('#panel-ownedTab');
+                        if (panel) {
+                            const ul = window.__sb_lastUL || document.querySelector('ul[class^="stock___"]');
+                            try { showCalculators(panel, ul); } catch (e) { /* ignore */ }
+                        }
+                    }
+                    if (m.type === 'childList' && m.target && m.target.id === 'panel-ownedTab') {
+                        const panel = document.querySelector('#panel-ownedTab');
+                        if (panel) {
+                            const ul = window.__sb_lastUL || document.querySelector('ul[class^="stock___"]');
+                            try { showCalculators(panel, ul); } catch (e) { /* ignore */ }
+                        }
+                    }
+                }
+            });
+            obs.observe(document.body, { childList: true, subtree: true });
+            window.__sb_panelObserver = obs;
+            // also listen for clicks inside the panel to re-add calculators after actions
+            if (!window.__sb_clickHandlerAdded) {
+                window.__sb_clickHandlerAdded = true;
+                document.addEventListener('click', (ev) => {
+                    if (ev.target && ev.target.closest && ev.target.closest('#panel-ownedTab')) {
+                        setTimeout(() => {
+                            const panel = document.querySelector('#panel-ownedTab');
+                            if (panel) {
+                                const ul = window.__sb_lastUL || document.querySelector('ul[class^="stock___"]');
+                                try { showCalculators(panel, ul); } catch (e) { /* ignore */ }
+                            }
+                        }, 200);
+                    }
+                }, true);
+            }
+        } catch (e) {
+            /* ignore */
+        }
     }
     // Convert strings like "2.5k", "1m" or plain numbers into numeric values.
     function parseAbbreviation(input) {
@@ -218,25 +266,7 @@
             }
         }, 50);
 
-        // Ensure calculators are re-added if the panel updates (e.g., after a buy/sell action)
-        try {
-            if (!panel.dataset.sbObserver) {
-                panel.dataset.sbObserver = '1';
-                const obs = new MutationObserver((mutations) => {
-                    if (panel._sbPending) return;
-                    panel._sbPending = true;
-                    setTimeout(() => {
-                        try { showCalculators(panel, ul); } catch (e) { /* ignore */ }
-                        panel._sbPending = false;
-                    }, 60);
-                });
-                obs.observe(panel, { childList: true, subtree: true, attributes: false });
-                // store so it can be disconnected later if needed
-                panel._sbObserver = obs;
-            }
-        } catch (e) {
-            /* ignore observer errors */
-        }
+        // no per-panel observer here; document-level observer handles re-adding
     }
 
 })();
