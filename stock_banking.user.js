@@ -218,6 +218,39 @@
         input.addEventListener('blur', () => formatThousandsInput(input));
     }
 
+    function createCalculatorBlock(placeholder, inputId, buttonId) {
+        const block = document.createElement('div');
+        block.className = 'actions___PIYmF withInput___ZVcue';
+        block.style.marginTop = '10px';
+        block.innerHTML = `
+            <br>
+            <div class="input-money-group success">
+                <span class="input-money-symbol">$</span><input type="text" id="${inputId}" class="input-money" placeholder="${placeholder}" autocomplete="off"></div>
+            <div style="margin-left: 10px"><button type="button" class="torn-btn gray" id="${buttonId}" style="margin-top: 4px;">Calc</button></div>
+        `;
+        return block;
+    }
+
+    function clearDefaultZero(inputEl) {
+        if (!inputEl) return;
+        if (inputEl.value === '0' || inputEl.value === '0.00') inputEl.value = '';
+        inputEl.addEventListener('focus', () => { if (inputEl.value === '0' || inputEl.value === '0.00') inputEl.value = ''; });
+    }
+
+    function getStockPriceFromUL(ul) {
+        if (!ul) return 0;
+        try {
+            const priceLi = ul.querySelector('li[data-name="priceTab"]') || ul.querySelector('li.stockPrice___WCQuw');
+            if (!priceLi) return 0;
+            const aria = priceLi.getAttribute('aria-label') || '';
+            const m = aria.match(/\$[\d,]+(?:\.\d+)?/);
+            if (m) return parseFloat(m[0].replace(/[$,]/g, ''));
+            const priceDiv = priceLi.querySelector('.price___CTjJE');
+            if (priceDiv) return parseFloat(priceDiv.textContent.replace(/[^0-9.]/g, '')) || 0;
+        } catch (e) {}
+        return 0;
+    }
+
     function showCalculators(panel, ul) {
         const buyBlock = panel.querySelector('.buyBlock___bIlBS .actions___PIYmF');
         const sellBlock = panel.querySelector('.sellBlock___A_yTW .actions___PIYmF');
@@ -239,65 +272,18 @@
         const buyExists = hasActionButton(buyBlock, /buy/i);
         const sellExists = hasActionButton(sellBlock, /sell/i);
 
-        // Determine the current stock price from the clicked UL (use aria-label as primary source)
-        let stockPrice = 0;
-        try {
-            const priceLi = ul.querySelector('li[data-name="priceTab"]') || ul.querySelector('li.stockPrice___WCQuw');
-            if (priceLi) {
-                const aria = priceLi.getAttribute('aria-label') || '';
-                const m = aria.match(/\$[\d,]+(?:\.\d+)?/);
-                if (m) stockPrice = parseFloat(m[0].replace(/[$,]/g, ''));
-                else {
-                    const priceDiv = priceLi.querySelector('.price___CTjJE');
-                    if (priceDiv) stockPrice = parseFloat(priceDiv.textContent.replace(/[^0-9.]/g, '')) || 0;
-                }
-            }
-        } catch (e) {
-            stockPrice = 0;
-        }
+        const stockPrice = getStockPriceFromUL(ul);
 
         if (buyBlock && buyExists && !panel.querySelector('#purchase_total')) {
-            const buyCalc = document.createElement('div');
-            buyCalc.className = 'actions___PIYmF withInput___ZVcue'; 
-            buyCalc.style.marginTop = '10px';
-
-            buyCalc.innerHTML = `
-                <br>
-                <div class="input-money-group success">
-                    <span class="input-money-symbol">$</span><input type="text" id="purchase_total" class="input-money" placeholder="Invest $" autocomplete="off"></div>
-                <div style="margin-left: 10px"><button type="button" class="torn-btn gray" id="calc_buy" style="margin-top: 4px;">Calc</button></div>
-            `;
+            const buyCalc = createCalculatorBlock('Invest $', 'purchase_total', 'calc_buy');
             buyBlock.parentElement.appendChild(buyCalc);
-            // remove any unwanted default '0' the page/framework might put into the new input
-            setTimeout(() => {
-                const pi = buyCalc.querySelector('#purchase_total') || buyCalc.querySelector('input');
-                if (pi) {
-                    if (pi.value === '0' || pi.value === '0.00') pi.value = '';
-                    pi.addEventListener('focus', () => { if (pi.value === '0' || pi.value === '0.00') pi.value = ''; });
-                }
-            }, 60);
+            setTimeout(() => clearDefaultZero(buyCalc.querySelector('#purchase_total')), 60);
         }
 
         if (sellBlock && sellExists && !panel.querySelector('#selling_total')) {
-            const sellCalc = document.createElement('div');
-            sellCalc.className = 'actions___PIYmF withInput___ZVcue'; 
-            sellCalc.style.marginTop = '10px';
-
-            sellCalc.innerHTML = `
-                <br>
-                <div class="input-money-group success">
-                    <span class="input-money-symbol">$</span><input type="text" id="selling_total" class="input-money" placeholder="Cash Out $" autocomplete="off"></div>
-                <div style="margin-left: 10px"><button type="button" class="torn-btn gray" id="calc_sell" style="margin-top: 4px;">Calc</button></div>
-            `;
+            const sellCalc = createCalculatorBlock('Cash Out $', 'selling_total', 'calc_sell');
             sellBlock.parentElement.appendChild(sellCalc);
-            // remove any unwanted default '0' the page/framework might put into the new input
-            setTimeout(() => {
-                const si = sellCalc.querySelector('#selling_total') || sellCalc.querySelector('input');
-                if (si) {
-                    if (si.value === '0' || si.value === '0.00') si.value = '';
-                    si.addEventListener('focus', () => { if (si.value === '0' || si.value === '0.00') si.value = ''; });
-                }
-            }, 60);
+            setTimeout(() => clearDefaultZero(sellCalc.querySelector('#selling_total')), 60);
         }
 
         setTimeout(() => { 
@@ -353,8 +339,6 @@
                 }
             }
         }, 50);
-
-        // no per-panel observer here; document-level observer handles re-adding
     }
 
 })();
