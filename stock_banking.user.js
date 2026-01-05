@@ -145,24 +145,24 @@
             // remove any extra dots from fracPart
             fracPart = fracPart.replace(/\./g, '');
         }
-        intPart = intPart.replace(/,/g, '') || '0';
+        intPart = intPart.replace(/,/g, '');
+
+        // if nothing entered (no integer, no fraction, no suffix, no trailing dot) keep field empty
+        if (!intPart && !fracPart && !suffix && !trailingDot) {
+            el.value = '';
+            el.setSelectionRange(0, 0);
+            return;
+        }
 
         // format integer part with thousands separators
-        const intFormatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        const intFormatted = intPart ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
         let newValue = fracPart ? (intFormatted + '.' + fracPart) : intFormatted;
         if (trailingDot && !fracPart) newValue = newValue + '.';
         if (suffix) newValue = newValue + suffix;
-        // compute caret position: count digits+dot before original caret
-        const nonFormatBefore = raw.slice(0, caret).split('').filter(ch => /[0-9\.]/.test(ch)).length;
-        // map to newValue: find position after the nth digit/dot
-        let pos = 0, count = 0;
-        while (pos < newValue.length && count < nonFormatBefore) {
-            if (/[0-9\.]/.test(newValue[pos])) count++;
-            pos++;
-        }
-        // if caret was at end, keep it at end
-        if (caret === raw.length) pos = newValue.length;
+
         el.value = newValue;
+        // cheap caret handling: keep caret at same index if possible
+        const pos = Math.min(caret, newValue.length);
         el.setSelectionRange(pos, pos);
     }
 
